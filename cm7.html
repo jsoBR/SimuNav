@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <style>
+    canvas {
+        border: 1px solid black;
+      }
+      .control-container {
+        display: flex;
+        justify-content: space-between;
+        width: 500px; /* Ajuste a largura conforme necessário */
+        margin: 10px auto;
+      }
+      button, input {
+        margin: 10px;
+      }
+    </style>
+  </head>
+  <body>
+    <canvas id="canvas" width="500" height="300"></canvas>
+    <div class="control-container">
+      <div>
+        <button id="startButton">Iniciar</button>
+        <button id="invert" onclick="invert()">Inverter campo</button>
+      </div>
+      <div>
+        <p>Número de asteróides: <span id="Ncircles-value">5</span></p>
+      <input id="Ncircles-slider" type="range" min="0" max="15" value="5" step="5" oninput="updateNcircles()">
+      </div>
+      <div>
+        <p>Carga da partícula (coulomb): <span id="Charge-value">0</span></p>
+      <input id="q-slider" type="range" min="0" max="5" value="0" step="1" oninput="updateq()">
+      </div>
+      <div>
+        <p>Velocidade da partícula (m/s): <span id="vx-value">0</span></p>
+        <input id="vx-slider" type="range" min="0" max="2.5" value="0" step="0.5" oninput="updateVx()">
+      </div>
+      <div>
+        <p>Campo magnético (tesla): <span id="B-value">0</span></p>
+        <input id="B-slider" type="range" min="0" max="0.04" value="0" step="0.01" oninput="updateB()">
+    </div>
+    <div>
+      
+      </div>
+    </div>
+  <script>
+    var isPaused = false; 
+    var canvas = document.getElementById("canvas");
+    //canvas.style.backgroundColor = "#A020F0";
+    var ctx = canvas.getContext("2d");
+    function resizeCanvas() {
+      canvas.width = 0.95*window.innerWidth;
+      canvas.height = 0.8*window.innerHeight;
+    }
+    window.addEventListener('resize', resizeCanvas);
+    resizeCanvas(); 
+
+     // Carregar a imagem de fundo
+    var backgroundImage = new Image();
+    backgroundImage.src = "galaxia.jpeg";
+    var backgroundImageodot = new Image();
+    backgroundImageodot.src = "galaxia-odot-1.png";
+    var backgroundImageotimes = new Image();
+    backgroundImageotimes.src = "galaxia-otimes-1.png";
+
+
+    // Carregar a imagem da textura
+    var textureImage = new Image();
+    textureImage.src = 'asteroide.png';
+    var texture;
+    textureImage.onload = function() {
+        texture = ctx.createPattern(textureImage, 'repeat'); // Defina 'texture' aqui
+    }
+    
+    var circleRadiusMax = 80;
+    var circleRadiusMin = 10;
+
+    var xp = 0;
+    var yp = canvas.height/2;
+    var vx = 0;
+    var vy = 0;
+    var q = 0;
+    var B = 0;
+
+    var Ncircles = 4;
+    var circles = [];
+    
+    function updateq() {
+        // Pegar o valor do slider
+        var slider = document.getElementById("q-slider");
+        var value = slider.value;
+        // Atualizar o valor do span
+        var span = document.getElementById("Charge-value");
+        span.innerHTML = value;
+        // Atualizar o número de círculos
+        q = Number(value);
+      }
+
+    function updateNcircles() {
+        // Pegar o valor do slider
+        var slider = document.getElementById("Ncircles-slider");
+        var value = slider.value;
+        // Atualizar o valor do span
+        var span = document.getElementById("Ncircles-value");
+        span.innerHTML = value;
+        // Atualizar o número de círculos
+        Ncircles = Number(value);
+      }
+
+    function updateVx() {
+      var slider = document.getElementById("vx-slider");
+      var value = slider.value;
+      var span = document.getElementById("vx-value");
+      span.innerHTML = value;
+      vx = Number(value);
+    }
+
+    function updateB() {
+      var slider = document.getElementById("B-slider");
+      var value = slider.value;
+      var span = document.getElementById("B-value");
+      span.innerHTML = value;
+      B = Number(value);
+    }
+
+    function invert() {
+      B = -B;
+      var BSlider = document.getElementById("B-slider");
+      BSlider.value = B;
+      var BValue = document.getElementById("B-value");
+      BValue.textContent = B.toFixed(2);
+    }
+
+
+    function drawArrow(x, y, dx, dy, L) {
+      var angle = Math.atan2(dy, dx);
+      var headLength = 10; // Comprimento da cabeça da seta
+      var headWidth = 5; // Largura da cabeça da seta
+      var endX = x + L * Math.cos(angle);
+      var endY = y + L * Math.sin(angle);
+      ctx.beginPath();
+      ctx.moveTo(x, y);
+      ctx.lineTo(endX, endY);
+      ctx.lineTo(endX - headLength * Math.cos(angle - Math.PI / 6), endY - headLength * Math.sin(angle - Math.PI / 6));
+      ctx.moveTo(endX, endY);
+      ctx.lineTo(endX - headLength * Math.cos(angle + Math.PI / 6), endY - headLength * Math.sin(angle + Math.PI / 6));
+      ctx.lineWidth = 4;
+      ctx.stroke();
+    }
+  
+
+    function draw() {
+      if (requestID === null) {
+        xp = 0;
+        yp = canvas.height / 2;
+      }
+      
+      console.log("yp:", yp);
+
+      // Carregando a imagem de fundo do canvas
+      if (B === 0) {
+        ctx.drawImage(backgroundImage, 0, 0, canvas.width, canvas.height);
+      } else if (B > 0) {
+        ctx.drawImage(backgroundImageodot, 0, 0, canvas.width, canvas.height);
+      } else {
+        ctx.drawImage(backgroundImageotimes, 0, 0, canvas.width, canvas.height);
+      }
+     
+      // Desenha a partícula que será animada
+      ctx.beginPath();
+      ctx.arc(xp, yp, 8, 0, 2 * Math.PI);
+      ctx.fillStyle = "blue";
+      ctx.fill();
+      ctx.moveTo(xp, yp); 
+      ctx.strokeStyle = "white";
+      ctx.stroke();
+      xp += vx;
+      yp += vy;
+      vx += 0;
+      vy += q * vx * B;
+
+     // Desenhar a seta
+     ctx.strokeStyle = "white";
+     var L = 50; // Defina L para a distância desejada
+     drawArrow(xp, yp, vx, vy, L);
+
+      // Verificar se a partícula colide com algum círculo
+      for (let i = 0; i < circles.length; i++) {
+        var dx = xp - circles[i].x;
+        var dy = yp - circles[i].y;
+        var distance = Math.sqrt(dx * dx + dy * dy);
+
+   
+
+      for (let i = 0; i < circles.length; i++) {
+        ctx.beginPath();
+        ctx.arc(circles[i].x, circles[i].y, circles[i].r, 0, 2 * Math.PI);
+        ctx.fillStyle = texture;
+        ctx.fill();
+      }
+
+      if (distance < circles[i].r + 3) { // 3 é o raio da partícula
+        ctx.font = "150px Arial";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillStyle = "white";
+        ctx.fillText("GAME OVER", canvas.width/2, canvas.height/2);
+        cancelAnimationFrame(requestID);
+        return;
+      }
+    }
+
+    if ( Math.abs(yp) > canvas.height) {
+      ctx.font = "150px Arial";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillStyle = "white";
+      ctx.fillText("GAME OVER", canvas.width/2, canvas.height/2);
+      cancelAnimationFrame(requestID);
+    } else {
+      requestID = requestAnimationFrame(draw);
+    }
+
+    
+    if (xp > canvas.width) {
+      ctx.font = "150px Arial";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillStyle = "white";
+      ctx.fillText("VITÓRIA!", canvas.width/2, canvas.height/2);
+      cancelAnimationFrame(requestID);
+    } 
+  
+}
+
+    document.getElementById("startButton").addEventListener("click", function() {
+      xp = 0;
+      yp = canvas.height / 2;
+      vx = 0;
+      vy = 0;
+
+      var vxSlider = document.getElementById("vx-slider");
+      vxSlider.value = 0;
+      updateVx(); 
+
+      var BSlider = document.getElementById("B-slider");
+      BSlider.value = 0;
+      updateB(); 
+
+      var qSlider = document.getElementById("q-slider");
+      qSlider.value = 0;
+      updateq(); 
+
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      
+      circles = [];
+
+      for (let i = 0; i < Ncircles; i++) {
+        var circle = {
+          x: Math.random() * canvas.width,
+          y: Math.random() * canvas.height,
+          r: Math.random() * circleRadiusMax + circleRadiusMin
+        };
+        circles.push(circle);
+      }
+
+      requestID = requestAnimationFrame(draw);
+    });
+
+    var requestID = requestAnimationFrame(draw);
+    
+  </script>
+</body>
+</html>
